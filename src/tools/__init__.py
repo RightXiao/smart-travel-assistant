@@ -126,7 +126,7 @@ def get_travel_tools():
                 city = destination
             data = RouteTool.get_transit_route(origin, destination, city)
             if data:
-                return RouteTool.format_driving_route(data)
+                return RouteTool.format_transit_route(data)
             return "抱歉，暂时无法获取公交路线信息"
         except Exception as e:
             return f"参数格式错误，请使用格式：起点|终点|所在城市。错误：{e}"

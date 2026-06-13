@@ -1,17 +1,20 @@
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
+from pydantic_settings import BaseSettings
+from typing import Optional
 
 
-class Settings:
-    ZHIPUAI_API_KEY: str = os.getenv("ZHIPUAI_API_KEY", "")
-    ZHIPUAI_MODEL: str = os.getenv("ZHIPUAI_MODEL", "glm-5.1")
+class Settings(BaseSettings):
+    """应用配置设置。"""
     
-    AMAP_API_KEY: str = os.getenv("AMAP_API_KEY", "")
+    ZHIPUAI_API_KEY: str
+    ZHIPUAI_MODEL: str = "glm-5.1"
+    AMAP_API_KEY: str
+    APP_NAME: str = "智能旅行助手"
+    DEBUG: bool = False
     
-    APP_NAME: str = os.getenv("APP_NAME", "智能旅行助手")
-    DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
 
+# 全局单例
 settings = Settings()

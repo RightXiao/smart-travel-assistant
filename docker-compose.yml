@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  travel-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ZHIPUAI_API_KEY=${ZHIPUAI_API_KEY}
+      - AMAP_API_KEY=${AMAP_API_KEY}
+    volumes:
+      - .env:/app/.env
+      - memory:/app/memory
+    restart: unless-stopped
+
+  streamlit:
+    build: .
+    command: streamlit run web/app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - ZHIPUAI_API_KEY=${ZHIPUAI_API_KEY}
+      - AMAP_API_KEY=${AMAP_API_KEY}
+    volumes:
+      - .env:/app/.env
+      - memory:/app/memory
+    restart: unless-stopped
+
+volumes:
+  memory:

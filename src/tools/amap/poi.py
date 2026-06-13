@@ -1,6 +1,7 @@
 import requests
 from typing import Dict, Any, Optional, List
 from src.config.settings import settings
+from src.utils.logger import logger
 
 
 class POITool:
@@ -28,10 +29,10 @@ class POITool:
             if data.get("status") == "1":
                 return data
             else:
-                print(f"高德POI搜索API错误: {data.get('info', '未知错误')}")
+                logger.error(f"高德POI搜索API错误: {data.get('info', '未知错误')}")
                 return None
         except requests.RequestException as e:
-            print(f"POI搜索请求失败: {e}")
+            logger.error(f"POI搜索请求失败: {e}")
             return None
     
     @classmethod

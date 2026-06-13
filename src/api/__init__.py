@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from src.models.travel import ChatRequest, ChatResponse
 
 app = FastAPI(
@@ -8,6 +8,18 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# 单例管理器
+_assistant_instance = None
+
+
+def get_assistant():
+    """获取 TravelAssistant 单例实例。"""
+    global _assistant_instance
+    if _assistant_instance is None:
+        from src.agents.travel_assistant import TravelAssistant
+        _assistant_instance = TravelAssistant()
+    return _assistant_instance
+
 
 @app.get("/")
 def root():
@@ -15,10 +27,7 @@ def root():
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
-    from src.agents.travel_assistant import TravelAssistant
-
-    assistant = TravelAssistant()
+def chat(request: ChatRequest, assistant=Depends(get_assistant)):
     history_dicts = [m.model_dump() if hasattr(m, "model_dump") else m for m in request.chat_history]
     response_text = assistant.chat(request.message, chat_history=history_dicts)
     return ChatResponse(response=response_text)
@@ -90,7 +99,7 @@ def get_transit_route(origin: str, destination: str, city: str):
 
     data = RouteTool.get_transit_route(origin, destination, city)
     if data and "route" in data:
-        return {"status": "ok", "data": RouteTool.format_driving_route(data)}
+        return {"status": "ok", "data": RouteTool.format_transit_route(data)}
     return {"status": "error", "message": "无法查询公交路线"}
 
 

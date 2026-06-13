@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "travel-agent"
+version = "1.0.0"
+description = "基于LangChain的智能旅行助手"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+dependencies = [
+    "langchain>=0.1.0,<1.0.0",
+    "langchain-openai>=0.0.5,<1.0.0",
+    "langchain-core>=0.1.0,<1.0.0",
+    "langgraph>=0.2.0,<1.0.0",
+    "fastapi>=0.109.0,<1.0.0",
+    "uvicorn>=0.27.0,<1.0.0",
+    "streamlit>=1.30.0,<2.0.0",
+    "requests>=2.31.0,<3.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "pydantic>=2.5.0,<3.0.0",
+    "pydantic-settings>=2.0.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0,<8.0.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
+    "black>=23.0.0,<24.0.0",
+    "ruff>=0.1.0,<1.0.0",
+    "mypy>=1.0.0,<2.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/travel-agent"
+Documentation = "https://github.com/yourusername/travel-agent#readme"
+Repository = "https://github.com/yourusername/travel-agent"
+Issues = "https://github.com/yourusername/travel-agent/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

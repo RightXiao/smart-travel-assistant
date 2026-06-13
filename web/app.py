@@ -108,6 +108,7 @@ with st.sidebar:
     st.header("🚗 路线规划")
     route_origin = st.text_input("起点", placeholder="如：天安门", key="route_origin")
     route_dest = st.text_input("终点", placeholder="如：故宫博物院", key="route_dest")
+    route_city = st.text_input("所在城市", placeholder="如：北京", key="route_city")
     route_mode = st.radio("出行方式", ["驾车", "公交"], horizontal=True)
     if st.button("规划路线", use_container_width=True):
         from src.tools.amap.route import RouteTool
@@ -115,10 +116,13 @@ with st.sidebar:
             if route_mode == "驾车":
                 data = RouteTool.get_driving_route(route_origin, route_dest)
             else:
-                data = RouteTool.get_transit_route(route_origin, route_dest, route_dest)
+                data = RouteTool.get_transit_route(route_origin, route_dest, route_city)
             if data:
                 st.success("规划成功")
-                st.markdown(RouteTool.format_driving_route(data))
+                if route_mode == "驾车":
+                    st.markdown(RouteTool.format_driving_route(data))
+                else:
+                    st.markdown(RouteTool.format_transit_route(data))
             else:
                 st.error("路线规划失败")
 

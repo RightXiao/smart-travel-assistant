@@ -1,6 +1,7 @@
 import requests
 from typing import Dict, Any, Optional
 from src.config.settings import settings
+from src.utils.logger import logger
 
 
 class WeatherTool:
@@ -19,10 +20,10 @@ class WeatherTool:
             data = response.json()
             if data.get("status") == "1":
                 return data
-            print(f"高德天气API错误: {data.get('info', '未知错误')}")
+            logger.error(f"高德天气API错误: {data.get('info', '未知错误')}")
             return None
         except requests.RequestException as e:
-            print(f"请求天气信息失败: {e}")
+            logger.error(f"请求天气信息失败: {e}")
             return None
 
     @classmethod

@@ -1,6 +1,7 @@
 import requests
 from typing import Dict, Any, Optional, List, Tuple
 from src.config.settings import settings
+from src.utils.logger import logger
 
 
 class RouteTool:
@@ -31,10 +32,10 @@ class RouteTool:
             if data.get("status") == "1":
                 return data
             else:
-                print(f"高德驾车路线API错误: {data.get('info', '未知错误')}")
+                logger.error(f"高德驾车路线API错误: {data.get('info', '未知错误')}")
                 return None
         except requests.RequestException as e:
-            print(f"驾车路线请求失败: {e}")
+            logger.error(f"驾车路线请求失败: {e}")
             return None
     
     @classmethod
@@ -54,10 +55,10 @@ class RouteTool:
             if data.get("status") == "1":
                 return data
             else:
-                print(f"高德公交路线API错误: {data.get('info', '未知错误')}")
+                logger.error(f"高德公交路线API错误: {data.get('info', '未知错误')}")
                 return None
         except requests.RequestException as e:
-            print(f"公交路线请求失败: {e}")
+            logger.error(f"公交路线请求失败: {e}")
             return None
     
     @classmethod
@@ -90,6 +91,105 @@ class RouteTool:
         if len(steps) > 8:
             result += f"\n... (还有{len(steps) - 8}个步骤)"
 
+        return result
+
+    @classmethod
+    def format_transit_route(cls, route_data: Dict[str, Any]) -> str:
+        """格式化公交路线信息。"""
+        if not route_data or "route" not in route_data:
+            return "暂无公交路线信息"
+        
+        route = route_data["route"]
+        transits = route.get("transits", [])
+        
+        if not transits:
+            return "暂无公交路线信息"
+        
+        result = "🚌 公交路线规划：\n\n"
+        for i, transit in enumerate(transits[:3], 1):
+            result += f"方案{i}：\n"
+            result += f"  预计时间：{transit.get('duration', '未知')}秒\n"
+            result += f"  步行距离：{transit.get('walking_distance', '未知')}米\n"
+            
+            # 解析换乘信息
+            segments = transit.get("segments", [])
+            transit_lines = []
+            for seg in segments:
+                if "bus" in seg and seg["bus"]:
+                    buslines = seg["bus"].get("buslines", [])
+                    for line in buslines:
+                        transit_lines.append(line.get("name", "未知线路"))
+            
+            if transit_lines:
+                result += f"  换乘线路：{' → '.join(transit_lines)}\n"
+            result += "\n"
+        
+        return result
+
+    @classmethod
+    def get_walking_route(cls, origin: str, destination: str) -> Optional[Dict[str, Any]]:
+        """获取步行路线。
+        
+        Args:
+            origin: 起点坐标（经纬度，格式：经度,纬度）。
+            destination: 终点坐标（经纬度，格式：经度,纬度）。
+            
+        Returns:
+            步行路线数据字典。
+        """
+        params = {
+            "key": settings.AMAP_API_KEY,
+            "origin": origin,
+            "destination": destination,
+        }
+        
+        try:
+            response = requests.get(cls.WALKING_URL, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("status") == "1":
+                return data
+            else:
+                logger.error(f"高德步行路线API错误: {data.get('info', '未知错误')}")
+                return None
+        except requests.RequestException as e:
+            logger.error(f"步行路线请求失败: {e}")
+            return None
+
+    @classmethod
+    def format_walking_route(cls, route_data: Dict[str, Any]) -> str:
+        """格式化步行路线信息。"""
+        if not route_data or "route" not in route_data:
+            return "暂无步行路线信息"
+        
+        route = route_data["route"]
+        paths = route.get("paths", [])
+        
+        if not paths:
+            return "暂无步行路线信息"
+        
+        path = paths[0]
+        distance = int(path.get("distance", 0))
+        duration = int(path.get("duration", 0))
+        
+        # 转换距离和时间
+        distance_km = distance / 1000
+        duration_min = duration / 60
+        
+        result = f"🚶 步行路线规划：\n\n"
+        result += f"  总距离：{distance_km:.1f}公里\n"
+        result += f"  预计时间：{duration_min:.0f}分钟\n\n"
+        
+        # 步骤详情
+        steps = path.get("steps", [])
+        if steps:
+            result += "  路线详情：\n"
+            for i, step in enumerate(steps[:5], 1):
+                instruction = step.get("instruction", "")
+                step_distance = int(step.get("distance", 0))
+                result += f"    {i}. {instruction} ({step_distance}米)\n"
+        
         return result
 
     @classmethod
