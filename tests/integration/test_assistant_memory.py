@@ -10,13 +10,13 @@
 import json
 import shutil
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from src.agents.travel_assistant import TravelAssistant
 from src.memory.file_memory import FileMemory
-from langchain_core.messages import AIMessage
 
 _TMP_ROOT = Path(__file__).resolve().parent.parent / ".tmp"
 

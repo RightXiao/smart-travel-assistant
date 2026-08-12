@@ -21,8 +21,8 @@ class TestRoot:
 
 class TestChat:
     def test_chat(self):
-        with patch("src.agents.travel_assistant.TravelAssistant") as MockAsst:
-            MockAsst.return_value.chat.return_value = "助手回复"
+        with patch("src.agents.travel_assistant.TravelAssistant") as mock_asst:
+            mock_asst.return_value.chat.return_value = "助手回复"
             resp = _client().post(
                 "/chat",
                 json={"message": "你好", "chat_history": []},

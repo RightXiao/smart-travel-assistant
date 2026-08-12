@@ -1,10 +1,9 @@
 import re
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
 from src.config.settings import get_settings
-from src.utils.http import cached_json_get
 from src.tools.amap import geocode
-from src.utils.logger import logger
+from src.utils.http import cached_json_get
 
 
 def _strip_tags(text: Any) -> str:

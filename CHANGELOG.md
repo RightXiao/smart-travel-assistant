@@ -25,7 +25,7 @@
 
 ### 🧪 测试 / 工程
 
-- 新增 `.github/workflows/ci.yml`（ruff / black --check / pytest）。
+- 新增 `.github/workflows/ci.yml`（ruff check / pytest）。
 - 新增 `tests/unit/test_api.py`（FastAPI TestClient 覆盖 8 个端点）、`tests/unit/test_travel_assistant.py`。
 - 重写 `test_tools.py`：真正调用各工具函数并断言行为，覆盖分隔符归一化与错误脱敏。
 - 补齐 route（walking / strip_tags / transit 城市校验 / 数值容错）、weather（forecast 格式化）、memory（并发 / 原子写 / session 无碰撞）、poi（预算过滤边界）、http（负缓存）用例。

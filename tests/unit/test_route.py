@@ -273,7 +273,7 @@ class TestRouteTool:
 
     def test_safe_int_and_float(self):
         """数值转换容错：非法值返回 0。"""
-        from src.tools.amap.route import _safe_int, _safe_float
+        from src.tools.amap.route import _safe_float, _safe_int
         assert _safe_int("1800") == 1800
         assert _safe_int("abc") == 0
         assert _safe_int(None) == 0

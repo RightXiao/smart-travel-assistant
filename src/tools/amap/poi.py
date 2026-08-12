@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
 from src.config.settings import get_settings
 from src.utils.http import cached_json_get

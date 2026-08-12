@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from src.tools import get_travel_tools, _normalize_separator
+from src.tools import _normalize_separator, get_travel_tools
 
 
 def _tool_by_name(name):

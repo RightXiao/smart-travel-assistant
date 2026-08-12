@@ -1,5 +1,7 @@
 from typing import Optional
-from fastapi import FastAPI, Depends
+
+from fastapi import Depends, FastAPI
+
 from src.models.travel import ChatRequest, ChatResponse, MultiSpotRouteRequest
 
 app = FastAPI(
