@@ -6,19 +6,20 @@
 
 - 🌤️ **实时天气查询** - 集成高德地图API获取实时天气和穿搭建议
 - 🏛️ **景点推荐** - 智能推荐目的地热门景点
-- 🗺️ **路线规划** - 多个景点之间的最优路线规划
-- 🍜 **美食推荐** - 当地特色美食介绍
-- 🏨 **住宿建议** - 根据预算推荐合适的住宿
-- 💡 **智能对话** - 支持自然语言多轮对话
-- 🖥️ **双界面支持** - 提供命令行界面(CLI)和Web界面(Streamlit)
+- 🗺️ **路线规划** - 多个景点之间的最优路线规划（地名自动定位，无需手填坐标）
+- 🍜 **美食推荐** - 当地特色美食介绍（含评分 / 人均参考）
+- 🏨 **住宿建议** - 根据预算推荐合适的住宿（含评分 / 参考价，按价格区间真实过滤）
+- 💬 **智能对话** - 支持自然语言多轮对话，并按会话持久化记忆（进程重启不丢失）
+- 🖥️ **多界面支持** - 提供命令行界面(CLI)、Web界面(Streamlit)和 RESTful API(FastAPI)
 
 ## 🛠️ 技术栈
 
 - **后端**: Python 3.9+
-- **AI框架**: LangChain
+- **AI框架**: LangChain / LangGraph（ReAct Agent）
 - **LLM**: GLM-5.1 (智谱AI)
-- **Web框架**: Streamlit
-- **地图服务**: 高德地图API
+- **Web框架**: Streamlit / FastAPI
+- **地图服务**: 高德地图API（天气 / POI / 路线 / 地理编码）
+- **记忆存储**: 文件持久化（按会话）
 - **依赖管理**: pip
 
 ## 📦 安装
@@ -65,6 +66,7 @@ copy .env.example .env
 # 智谱AI API配置
 ZHIPUAI_API_KEY=your_zhipuai_api_key_here
 ZHIPUAI_MODEL=glm-5.1
+# ZHIPUAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4/   # OpenAI 兼容端点（可选，默认值）
 
 # 高德地图API配置
 AMAP_API_KEY=your_amap_api_key_here
@@ -106,9 +108,30 @@ python -m src.cli.main "我想去北京旅游3天，预算5000元"
 from src.agents.travel_assistant import TravelAssistant
 
 assistant = TravelAssistant()
-response = assistant.chat("我想去上海玩，有什么推荐吗？")
+# 不传 chat_history 时，按 session_id 自动持久化记忆
+response = assistant.chat("我想去上海玩，有什么推荐吗？", session_id="my-trip")
 print(response)
 ```
+
+### 方式四：RESTful API（FastAPI）
+
+```bash
+uvicorn src.api.main:app --reload
+```
+
+主要端点：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/chat` | 多轮对话（支持带 `chat_history`） |
+| GET  | `/weather/{city}` | 实时天气 / 预报（`?forecast=true`） |
+| GET  | `/spots/{city}` | 景点搜索 |
+| GET  | `/food/{city}` | 美食搜索 |
+| GET  | `/hotels/{city}` | 酒店（可 `?budget=经济型`） |
+| GET  | `/route/driving` | 驾车路线（`?origin=..&destination=..`） |
+| GET  | `/route/transit` | 公交路线（`?origin=..&destination=..&city=..`） |
+
+访问 `http://localhost:8000/docs` 查看交互式 API 文档。
 
 ## 📂 项目结构
 
@@ -125,14 +148,20 @@ d:\Experiment\
 │   │   └── settings.py              # 配置管理
 │   ├── agents/                       # Agent实现
 │   │   ├── __init__.py
-│   │   └── travel_assistant.py      # 旅行助手Agent
+│   │   └── travel_assistant.py      # 旅行助手Agent（接入持久化记忆）
+│   ├── memory/                       # 记忆系统
+│   │   └── file_memory.py            # 文件持久化（按会话）
 │   ├── tools/                        # 工具模块
 │   │   ├── __init__.py               # 工具整合
 │   │   └── amap/                     # 高德地图工具
-│   │       ├── __init__.py
+│   │       ├── geocode.py            # 地理编码（地名→坐标）
 │   │       ├── weather.py            # 天气查询
 │   │       ├── route.py              # 路线规划
-│   │       └── poi.py                # POI搜索
+│   │       └── poi.py                # POI搜索（含评分价格）
+│   ├── utils/                        # 通用工具
+│   │   ├── logger.py                 # 日志
+│   │   └── http.py                   # 共享Session + 重试 + 缓存
+│   ├── api/                          # FastAPI 接口
 │   └── cli/                          # 命令行界面
 │       ├── __init__.py
 │       └── main.py

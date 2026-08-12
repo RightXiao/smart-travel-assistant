@@ -1,6 +1,7 @@
-import requests
 from typing import Dict, Any, Optional
-from src.config.settings import settings
+
+from src.config.settings import get_settings
+from src.utils.http import cached_json_get
 from src.utils.logger import logger
 
 
@@ -10,21 +11,17 @@ class WeatherTool:
     @classmethod
     def get_weather(cls, city: str, extensions: str = "base") -> Optional[Dict[str, Any]]:
         params = {
-            "key": settings.AMAP_API_KEY,
+            "key": get_settings().AMAP_API_KEY,
             "city": city,
             "extensions": extensions,
         }
-        try:
-            response = requests.get(cls.BASE_URL, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            if data.get("status") == "1":
-                return data
-            logger.error(f"高德天气API错误: {data.get('info', '未知错误')}")
-            return None
-        except requests.RequestException as e:
-            logger.error(f"请求天气信息失败: {e}")
-            return None
+        cache_key = f"weather:{extensions}:{city}"
+        data = cached_json_get(cls.BASE_URL, params, cache_key=cache_key)
+        if data and data.get("status") == "1":
+            return data
+        if data:
+            logger.error("高德天气API错误: %s", data.get("info", "未知错误"))
+        return None
 
     @classmethod
     def get_weather_forecast(cls, city: str) -> Optional[Dict[str, Any]]:
@@ -36,16 +33,20 @@ class WeatherTool:
         if not weather_data or "lives" not in weather_data:
             return "暂无天气信息"
 
-        lives = weather_data["lives"][0]
+        lives = weather_data.get("lives") or []
+        if not lives:
+            return "暂无天气信息"
+
+        live = lives[0]
         result = f"""
 🌤️ 实时天气：
-📍 城市：{lives.get('city', '未知')}
-🌡️ 天气：{lives.get('weather', '未知')}
-🌡️ 温度：{lives.get('temperature', '未知')}℃
-💨 风向：{lives.get('winddirection', '未知')}风
-💨 风力：{lives.get('windpower', '未知')}级
-💧 湿度：{lives.get('humidity', '未知')}%
-🕐 发布时间：{lives.get('reporttime', '未知')}
+📍 城市：{live.get('city', '未知')}
+🌡️ 天气：{live.get('weather', '未知')}
+🌡️ 温度：{live.get('temperature', '未知')}℃
+💨 风向：{live.get('winddirection', '未知')}风
+💨 风力：{live.get('windpower', '未知')}级
+💧 湿度：{live.get('humidity', '未知')}%
+🕐 发布时间：{live.get('reporttime', '未知')}
 """.strip()
         return result
 
@@ -54,12 +55,16 @@ class WeatherTool:
         if not weather_data or "forecasts" not in weather_data:
             return "暂无天气预报信息"
 
-        forecasts = weather_data["forecasts"][0]
-        casts = forecasts.get("casts", [])
+        forecasts = weather_data.get("forecasts") or []
+        if not forecasts:
+            return "暂无天气预报信息"
+
+        forecast = forecasts[0]
+        casts = forecast.get("casts", [])
         if not casts:
             return "暂无天气预报信息"
 
-        lines = [f"\n📅 {forecasts.get('city', '未知')} 未来天气预报："]
+        lines = [f"\n📅 {forecast.get('city', '未知')} 未来天气预报："]
         for cast in casts:
             date = cast.get("date", "")
             week_map = {"1": "一", "2": "二", "3": "三", "4": "四", "5": "五", "6": "六", "7": "日"}
@@ -82,7 +87,10 @@ class WeatherTool:
         """根据天气数据生成穿搭建议"""
         if not weather_data or "lives" not in weather_data:
             return ""
-        live = weather_data["lives"][0]
+        lives = weather_data.get("lives") or []
+        if not lives:
+            return ""
+        live = lives[0]
         temp_str = live.get("temperature", "")
         weather = live.get("weather", "")
         wind = live.get("windpower", "")

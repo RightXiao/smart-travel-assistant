@@ -1,22 +1,30 @@
-import pytest
-from src.tools import get_travel_tools
+from unittest.mock import patch
+
+from src.tools import get_travel_tools, _normalize_separator
 
 
-class TestTools:
-    """工具集成测试。"""
+def _tool_by_name(name):
+    tools = get_travel_tools()
+    return next(t for t in tools if t.name == name)
 
+
+class TestNormalizeSeparator:
+    def test_normalizes_chinese_separators(self):
+        assert _normalize_separator("北京，天安门、故宫；颐和园") == "北京|天安门|故宫|颐和园"
+
+    def test_preserves_pipe(self):
+        assert _normalize_separator("a|b|c") == "a|b|c"
+
+
+class TestToolRegistry:
     def test_get_travel_tools_returns_list(self):
-        """测试获取旅行工具返回列表。"""
         tools = get_travel_tools()
         assert isinstance(tools, list)
-        assert len(tools) > 0
+        assert len(tools) == 10
 
-    def test_get_travel_tools_contains_expected_tools(self):
-        """测试旅行工具包含预期的工具。"""
-        tools = get_travel_tools()
-        tool_names = [tool.name for tool in tools]
-
-        expected_tools = [
+    def test_expected_tool_names(self):
+        names = [t.name for t in get_travel_tools()]
+        for expected in [
             "查询实时天气",
             "查询天气预报",
             "查询景点",
@@ -27,88 +35,130 @@ class TestTools:
             "公交路线规划",
             "多景点路线规划",
             "查询穿搭建议",
-        ]
+        ]:
+            assert expected in names, f"缺少工具: {expected}"
 
-        for expected_tool in expected_tools:
-            assert expected_tool in tool_names, f"缺少工具: {expected_tool}"
 
-    def test_weather_tool_func(self):
-        """测试天气工具函数。"""
-        tools = get_travel_tools()
-        weather_tool = next(
-            tool for tool in tools if tool.name == "查询实时天气"
-        )
-        # 由于没有实际的API密钥，这里只测试函数存在
-        assert callable(weather_tool.func)
+class TestWeatherTools:
+    def test_weather_tool_success(self):
+        with patch("src.tools.amap.weather.WeatherTool.get_weather") as m:
+            m.return_value = {
+                "lives": [{"city": "北京", "weather": "晴", "temperature": "25"}]
+            }
+            result = _tool_by_name("查询实时天气").func("北京")
+            assert "北京" in result
 
-    def test_forecast_tool_func(self):
-        """测试天气预报工具函数。"""
-        tools = get_travel_tools()
-        forecast_tool = next(
-            tool for tool in tools if tool.name == "查询天气预报"
-        )
-        assert callable(forecast_tool.func)
+    def test_weather_tool_fallback(self):
+        with patch("src.tools.amap.weather.WeatherTool.get_weather") as m:
+            m.return_value = None
+            result = _tool_by_name("查询实时天气").func("北京")
+            assert "无法获取天气信息" in result
 
-    def test_scenic_spots_tool_func(self):
-        """测试景点工具函数。"""
-        tools = get_travel_tools()
-        spots_tool = next(
-            tool for tool in tools if tool.name == "查询景点"
-        )
-        assert callable(spots_tool.func)
 
-    def test_food_tool_func(self):
-        """测试美食工具函数。"""
-        tools = get_travel_tools()
-        food_tool = next(
-            tool for tool in tools if tool.name == "查询美食"
-        )
-        assert callable(food_tool.func)
+class TestPOITools:
+    def test_scenic_spots_tool_success(self):
+        with patch("src.tools.amap.poi.POITool.search_scenic_spots") as m:
+            m.return_value = {"pois": [{"name": "故宫", "address": "x", "location": "y"}]}
+            result = _tool_by_name("查询景点").func("北京")
+            assert "故宫" in result
 
-    def test_hotel_tool_func(self):
-        """测试住宿工具函数。"""
-        tools = get_travel_tools()
-        hotel_tool = next(
-            tool for tool in tools if tool.name == "查询住宿"
-        )
-        assert callable(hotel_tool.func)
+    def test_food_tool_fallback(self):
+        with patch("src.tools.amap.poi.POITool.search_food") as m:
+            m.return_value = None
+            result = _tool_by_name("查询美食").func("北京")
+            assert "无法获取美食信息" in result
 
-    def test_hotel_budget_tool_func(self):
-        """测试按预算查询住宿工具函数。"""
-        tools = get_travel_tools()
-        hotel_budget_tool = next(
-            tool for tool in tools if tool.name == "按预算查询住宿"
-        )
-        assert callable(hotel_budget_tool.func)
+    def test_hotel_budget_tool_parses(self):
+        with patch("src.tools.amap.poi.POITool.search_hotel_by_budget") as m:
+            m.return_value = {
+                "pois": [{"name": "如家", "address": "x", "biz_ext": {"cost": "200"}}]
+            }
+            result = _tool_by_name("按预算查询住宿").func("北京,经济型")
+            # 断言城市与预算被正确拆分
+            args, _ = m.call_args
+            assert args[0] == "北京"
+            assert args[1] == "经济型"
+            assert "如家" in result
 
-    def test_driving_route_tool_func(self):
-        """测试驾车路线工具函数。"""
-        tools = get_travel_tools()
-        driving_tool = next(
-            tool for tool in tools if tool.name == "驾车路线规划"
-        )
-        assert callable(driving_tool.func)
+    def test_hotel_budget_tool_error_sanitized(self):
+        with patch("src.tools.amap.poi.POITool.search_hotel_by_budget") as m:
+            m.side_effect = Exception("secret-api-key-abc123")
+            result = _tool_by_name("按预算查询住宿").func("北京|经济型")
+            # 异常信息不得泄漏给用户
+            assert "secret-api-key" not in result
+            assert "参数格式错误" in result
 
-    def test_transit_route_tool_func(self):
-        """测试公交路线工具函数。"""
-        tools = get_travel_tools()
-        transit_tool = next(
-            tool for tool in tools if tool.name == "公交路线规划"
-        )
-        assert callable(transit_tool.func)
 
-    def test_multi_spot_route_tool_func(self):
-        """测试多景点路线工具函数。"""
-        tools = get_travel_tools()
-        multi_spot_tool = next(
-            tool for tool in tools if tool.name == "多景点路线规划"
-        )
-        assert callable(multi_spot_tool.func)
+class TestRouteTools:
+    def test_driving_route_tool_success(self):
+        with patch("src.tools.amap.route.RouteTool.get_driving_route") as m:
+            m.return_value = {
+                "route": {
+                    "paths": [{"duration": "600", "distance": "1000", "steps": []}]
+                }
+            }
+            result = _tool_by_name("驾车路线规划").func("天安门|故宫")
+            assert "驾车路线规划" in result
 
-    def test_dressing_tool_func(self):
-        """测试穿搭建议工具函数。"""
-        tools = get_travel_tools()
-        dressing_tool = next(
-            tool for tool in tools if tool.name == "查询穿搭建议"
-        )
-        assert callable(dressing_tool.func)
+    def test_transit_route_requires_city(self):
+        # 缺少城市时应返回明确提示，不再用 destination 冒充 city
+        result = _tool_by_name("公交路线规划").func("天安门|故宫")
+        assert "所在城市" in result
+
+    def test_transit_route_success(self):
+        with patch("src.tools.amap.route.RouteTool.get_transit_route") as m:
+            m.return_value = {
+                "route": {
+                    "transits": [
+                        {"duration": "600", "walking_distance": "100", "segments": []}
+                    ]
+                }
+            }
+            result = _tool_by_name("公交路线规划").func("天安门|故宫|北京")
+            args, _ = m.call_args
+            assert args[2] == "北京"
+            assert "公交路线规划" in result
+
+    def test_multi_spot_route_tool_success(self):
+        with patch("src.tools.amap.route.RouteTool.plan_multi_spot_route") as m:
+            m.return_value = {
+                "segments": [
+                    {"from": "天安门", "to": "故宫", "duration_minutes": 30, "distance_km": 5.0}
+                ],
+                "total_duration": 30,
+                "total_distance": 5.0,
+                "spot_count": 2,
+                "mode": "driving",
+            }
+            result = _tool_by_name("多景点路线规划").func("北京|天安门|故宫")
+            args, _ = m.call_args
+            assert args[0] == ["天安门", "故宫"]
+            assert "多景点路线规划" in result
+
+    def test_multi_spot_route_insufficient_spots(self):
+        result = _tool_by_name("多景点路线规划").func("北京|天安门")
+        assert "至少需要" in result
+
+    def test_driving_route_tool_error_sanitized(self):
+        with patch("src.tools.amap.route.RouteTool.get_driving_route") as m:
+            m.side_effect = Exception("internal-url-and-key")
+            result = _tool_by_name("驾车路线规划").func("a|b")
+            assert "internal-url-and-key" not in result
+            assert "参数格式错误" in result
+
+
+class TestDressingTool:
+    def test_dressing_tool_success(self):
+        with patch("src.tools.amap.weather.WeatherTool.get_weather") as m:
+            m.return_value = {
+                "lives": [{"temperature": "35", "weather": "晴", "windpower": "2"}]
+            }
+            result = _tool_by_name("查询穿搭建议").func("北京")
+            assert "穿搭建议" in result
+            assert "短袖" in result
+
+    def test_dressing_tool_fallback(self):
+        with patch("src.tools.amap.weather.WeatherTool.get_weather") as m:
+            m.return_value = None
+            result = _tool_by_name("查询穿搭建议").func("北京")
+            assert "无法获取天气信息" in result
