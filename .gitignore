@@ -36,3 +36,13 @@ Thumbs.db
 
 # 日志
 *.log
+
+# 运行时持久化记忆（FileMemory 默认写入目录）
+memory/
+
+# 测试临时目录（tmp_path 在当前环境不可用时的替代）
+tests/.tmp/
+
+# ZCode 内部工作目录
+.zcode/
+

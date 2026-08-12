@@ -89,12 +89,12 @@
 | 天气 | 查询天气预报 | `WeatherTool.get_weather_forecast()` → 高德 `weatherInfo?extensions=all` |
 | 天气 | 查询穿搭建议 | `WeatherTool.get_dressing_advice()` — **本地规则引擎**，非 API |
 | POI | 查询景点 | `POITool.search_scenic_spots()` → 高德 `place/text?types=110000` |
-| POI | 查询美食 | `POITool.search_food()` → 高德 `place/text?types=050000` |
-| POI | 查询住宿 | `POITool.search_hotel()` → 高德 `place/text?types=100000` |
-| POI | 按预算查询住宿 | `POITool.search_hotel_by_budget()` — 通过关键词映射实现预算筛选 |
-| 路线 | 驾车路线规划 | `RouteTool.get_driving_route()` → 高德 `direction/driving` |
-| 路线 | 公交路线规划 | `RouteTool.get_transit_route()` → 高德 `direction/transit/integrated` |
-| 路线 | 多景点路线规划 | `RouteTool.plan_multi_spot_route()` — 依次连接各景点两两查询 |
+| POI | 查询美食 | `POITool.search_food()` → 高德 `place/text?types=050000&show_fields=biz_ext`（评分/人均） |
+| POI | 查询住宿 | `POITool.search_hotel()` → 高德 `place/text?types=100000&show_fields=biz_ext`（评分/参考价） |
+| POI | 按预算查询住宿 | `POITool.search_hotel_by_budget()` — 先关键词搜索，再按 `biz_ext.cost` 精确过滤价格区间 |
+| 路线 | 驾车路线规划 | `RouteTool.get_driving_route()` → 高德 `direction/driving`（地名先经地理编码） |
+| 路线 | 公交路线规划 | `RouteTool.get_transit_route()` → 高德 `direction/transit/integrated`（地名先经地理编码，需城市） |
+| 路线 | 多景点路线规划 | `RouteTool.plan_multi_spot_route()` — 各景点先经地理编码再两两查询 |
 
 每个 Tool 的标准结构：
 
@@ -104,25 +104,34 @@ Tool(name="xxx", func=回调函数, description="给LLM看的工具说明")
                                               决定何时、如何使用工具
 ```
 
-### 5. 记忆系统 — 对话历史
+### 5. 记忆系统 — 持久化对话历史
 
-`src/agents/travel_assistant.py:54-82`
+`src/agents/travel_assistant.py` + `src/memory/file_memory.py`
 
 ```
-用户每次请求 ──▶ chat_history (dict list) ──▶ 转换为 LangChain Message 序列
-                  [{"role":"user",...},             HumanMessage / AIMessage
-                   {"role":"assistant",...}]              │
-                                              ┌──────────┘
-                                              ▼
-                                       agent.invoke({"messages": [...]})
+用户每次请求
+   │
+   ├─ chat_history 显式传入? ──YES──▶ 直接使用
+   │                                   │
+   └─ 未传入 ──▶ FileMemory.get_messages(session_id)  ──▶ 转换为
+                                                          HumanMessage / AIMessage
+                                                                  │
+                                                                  ▼
+                                                          agent.invoke({"messages": [...]})
+                                                                  │
+   本轮结束后（仅当未显式传 history 时）◀── assistant 回复
+   └─ FileMemory.add_messages(session_id, [user, assistant])
+        └─ 落盘：memory/<sha256(session_id)[:16]>.json（跨请求 / 跨进程持久化）
 ```
 
 关键特征：
 
-- **短期记忆**：仅当前会话有效，进程重启即丢失
-- **截断策略**：`[-8:]` 保留最近 8 条，每条 `[:500]` 截断长内容
-- **无持久化**：没有数据库/向量存储/检查点
-- **无 RAG**：没有外部知识库检索
+- **持久化记忆**：`FileMemory` 按 `session_id` 把对话写入 `memory/<id>.json`，进程重启不丢失
+- **哈希文件名**：文件名 = `sha256(session_id)[:16]`，既防目录穿越，也避免不同原始 id 清洗后碰撞；文件内容记录原始 `session_id` 供 `list_sessions()` 还原
+- **原子写 + 进程内锁**：写入先落 `.json.tmp` 再 `os.replace` 原子替换，配合 `threading.Lock` 串行化读-改-写，避免并发丢历史或写坏 JSON
+- **会话隔离**：不同 `session_id`（CLI / API / Web 各自的会话）互不干扰
+- **显式优先**：调用方显式传入 `chat_history` 时跳过持久化读写，避免与外部状态重复
+- **截断策略**：`[-8:]` 保留最近 8 条，每条 `[:500]` 截断长内容，控制 token 用量
 
 ### 6. 评估器 — 隐式存在于 LLM 推理中
 
@@ -134,7 +143,9 @@ LLM 拿到工具返回 → 判断信息是否足够？
     └── 足够 → 生成 Final Answer
 ```
 
-原有的 `handle_parsing_errors=True` 和 `max_iterations=15` 是仅有的显式"安全网"。
+`create_react_agent` 的 ReAct 循环由 LangGraph 状态机驱动（Agent Node ⇄ Tool Node），
+当 LLM 不再输出 `tool_calls` 时循环终止。Agent 层在 `chat()` 中通过 try/except
+兜底工具链异常，并返回脱敏后的友好提示（不向用户暴露内部异常细节）。
 
 ---
 
@@ -199,7 +210,7 @@ LLM 拿到工具返回 → 判断信息是否足够？
 | 规划能力 | LLM 内隐规划 + SystemPrompt 模板 | 无显式 Planning 步骤，LLM 可能"遗漏"工具或信息 |
 | 工具调用 | 10 个扁平 Tool 列表 | LLM 需要从 10 个工具中自行选择，容易选错参数格式 |
 | 错误处理 | LLM 自行感知 + try/except | 工具失败后 LLM 可能重复重试或放弃，无自动恢复策略 |
-| 记忆 | 短期消息列表 | 无持久化，重启失忆；无用户偏好学习 |
+| 记忆 | 文件持久化（按会话） | 当前仅本地文件，未接入向量检索 / 用户偏好画像 |
 | 评估 | LLM 隐式判断 | 无法验证事实准确性、路线合理性、预算是否正确 |
 | 并行能力 | Tool Node 支持并行执行 | 但 LLM 的单次决策仍然串行 |
 
@@ -221,13 +232,20 @@ Experiment/
 │   ├── models/
 │   │   └── travel.py                 # Pydantic 数据模型
 │   ├── agents/
-│   │   └── travel_assistant.py       # 旅行助手 Agent（核心）
+│   │   └── travel_assistant.py       # 旅行助手 Agent（核心，接入 FileMemory）
+│   ├── memory/
+│   │   ├── base.py                   # 记忆系统抽象基类
+│   │   └── file_memory.py            # 文件持久化记忆（跨会话）
 │   ├── tools/
 │   │   ├── __init__.py               # 工具注册（10个LangChain Tool）
 │   │   └── amap/
+│   │       ├── geocode.py            # 地理编码（地名 → 经纬度，带缓存）
 │   │       ├── weather.py            # 天气查询 / 预报 / 穿搭建议
-│   │       ├── poi.py                # POI 搜索（景点/美食/酒店）
-│   │       └── route.py              # 路线规划（驾车/公交/多景点）
+│   │       ├── poi.py                # POI 搜索（景点/美食/酒店，含评分价格）
+│   │       └── route.py              # 路线规划（驾车/公交/多景点，统一时间距离格式化）
+│   ├── utils/
+│   │   ├── logger.py                 # 日志（防重复 handler）
+│   │   └── http.py                   # 共享 Session（重试）+ TTL 缓存
 │   ├── api/
 │   │   ├── __init__.py               # FastAPI 路由定义
 │   │   └── main.py                   # API 入口
@@ -245,7 +263,9 @@ Experiment/
 | Agent 框架 | LangGraph `create_react_agent` | ReAct 循环状态机 |
 | 工具抽象 | `langchain_core.tools.Tool` | 工具定义与注册 |
 | 消息类型 | `langchain_core.messages` | HumanMessage / AIMessage / SystemMessage / ToolMessage |
-| 地图数据 | 高德地图 Web API | 天气 / POI 搜索 / 路线规划 |
+| 地图数据 | 高德地图 Web API | 天气 / POI 搜索 / 路线规划 / 地理编码 |
 | Web 界面 | Streamlit | 聊天 UI + 侧边栏快速查询 |
 | API 服务 | FastAPI | RESTful 接口 |
 | 数据模型 | Pydantic v2 | 请求/响应结构定义 |
+| 记忆存储 | 文件（JSON） | `FileMemory` 按会话 ID 落盘，跨进程持久化；哈希文件名 + 原子写 |
+| HTTP 客户端 | requests Session | 连接池复用 + 指数退避重试 + TTL 缓存（仅缓存成功响应） |

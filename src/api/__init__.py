@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import FastAPI, Depends
-from src.models.travel import ChatRequest, ChatResponse
+from src.models.travel import ChatRequest, ChatResponse, MultiSpotRouteRequest
 
 app = FastAPI(
     title="智能旅行助手 API",
@@ -104,10 +104,12 @@ def get_transit_route(origin: str, destination: str, city: str):
 
 
 @app.post("/route/multi-spot")
-def plan_multi_spot_route(spots: list[str], city: str = "", mode: str = "driving"):
+def plan_multi_spot_route(request: MultiSpotRouteRequest):
     from src.tools.amap.route import RouteTool
 
-    data = RouteTool.plan_multi_spot_route(spots, city=city, mode=mode)
+    data = RouteTool.plan_multi_spot_route(
+        request.spots, city=request.city, mode=request.mode
+    )
     if data:
         return {"status": "ok", "data": RouteTool.format_multi_spot_route(data)}
     return {"status": "error", "message": "无法规划多景点路线"}
