@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import patch
 
 from src.tools.amap.route import RouteTool

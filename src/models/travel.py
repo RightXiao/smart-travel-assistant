@@ -89,5 +89,11 @@ class ChatRequest(BaseModel):
     chat_history: list[ChatMessage] = Field(default_factory=list)
 
 
+class MultiSpotRouteRequest(BaseModel):
+    spots: list[str] = Field(min_length=2, description="景点名称列表（至少 2 个）")
+    city: str = ""
+    mode: str = "driving"
+
+
 class ChatResponse(BaseModel):
     response: str

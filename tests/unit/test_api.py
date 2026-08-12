@@ -101,7 +101,7 @@ class TestRoute:
             m_fmt.return_value = "多景点路线"
             resp = _client().post(
                 "/route/multi-spot",
-                params={"spots": ["天安门", "故宫"], "city": "北京"},
+                json={"spots": ["天安门", "故宫"], "city": "北京"},
             )
             assert resp.status_code == 200
             assert resp.json()["status"] == "ok"

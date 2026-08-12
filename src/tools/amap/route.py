@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 
 from src.config.settings import get_settings
 from src.utils.http import cached_json_get
