@@ -4,6 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
+
 from src.agents.travel_assistant import TravelAssistant
 
 st.set_page_config(
@@ -30,7 +31,8 @@ st.caption("基于 AI 的智能旅行攻略生成器 — 支持天气查询、�
 # ---------- 侧边栏 ----------
 with st.sidebar:
     st.header("📋 使用说明")
-    st.markdown("""
+    st.markdown(
+        """
     在聊天框中输入你的旅行需求，尽量包含以下信息：
     - 🎯 目的地城市
     - 📅 旅行天数
@@ -40,7 +42,8 @@ with st.sidebar:
 
     **示例：**
     > 我想去北京旅游3天，预算5000元，喜欢历史文化类景点，想吃当地特色小吃
-    """)
+    """
+    )
 
     st.markdown("---")
     st.header("🛠️ 快捷查询")
@@ -51,6 +54,7 @@ with st.sidebar:
         city = st.text_input("城市", placeholder="如：北京", key="weather_city")
         if st.button("查询天气与穿搭", use_container_width=True):
             from src.tools.amap.weather import WeatherTool
+
             with st.spinner("查询中..."):
                 data = WeatherTool.get_weather(city)
                 if data:
@@ -65,6 +69,7 @@ with st.sidebar:
         spot_city = st.text_input("城市", placeholder="如：上海", key="spot_city")
         if st.button("查询热门景点", use_container_width=True):
             from src.tools.amap.poi import POITool
+
             with st.spinner("查询中..."):
                 data = POITool.search_scenic_spots(spot_city)
                 if data:
@@ -77,6 +82,7 @@ with st.sidebar:
         food_city = st.text_input("城市", placeholder="如：成都", key="food_city")
         if st.button("查询当地美食", use_container_width=True):
             from src.tools.amap.poi import POITool
+
             with st.spinner("查询中..."):
                 data = POITool.search_food(food_city)
                 if data:
@@ -96,8 +102,13 @@ with st.sidebar:
     )
     if st.button("查询住宿", use_container_width=True):
         from src.tools.amap.poi import POITool
+
         with st.spinner("查询中..."):
-            data = POITool.search_hotel_by_budget(hotel_city, budget) if budget else POITool.search_hotel(hotel_city)
+            data = (
+                POITool.search_hotel_by_budget(hotel_city, budget)
+                if budget
+                else POITool.search_hotel(hotel_city)
+            )
             if data:
                 st.success("查询成功")
                 st.markdown(POITool.format_hotel_with_budget(data, budget))
@@ -112,6 +123,7 @@ with st.sidebar:
     route_mode = st.radio("出行方式", ["驾车", "公交"], horizontal=True)
     if st.button("规划路线", use_container_width=True):
         from src.tools.amap.route import RouteTool
+
         with st.spinner("规划中..."):
             if route_mode == "驾车":
                 data = RouteTool.get_driving_route(route_origin, route_dest)
@@ -129,6 +141,20 @@ with st.sidebar:
 # ---------- 主聊天区 ----------
 assistant = get_assistant()
 
+with st.sidebar:
+    st.markdown("---")
+    st.header("💬 会话")
+    web_session = st.text_input(
+        "会话 ID（填写后历史与偏好跨刷新持久化）",
+        value="",
+        placeholder="如：my-hangzhou-trip",
+        key="web_session_id",
+    )
+    if st.button("🧹 清空该会话记忆", use_container_width=True) and web_session.strip():
+        if assistant:
+            assistant.clear_memory(web_session.strip())
+            st.success(f"已清空会话「{web_session.strip()}」的持久化记忆")
+
 # 初始化消息历史
 if "messages" not in st.session_state:
     st.session_state.messages = [
@@ -142,7 +168,7 @@ if "messages" not in st.session_state:
                 "- 🍜 推荐当地特色美食\n"
                 "- 🏨 根据预算推荐住宿\n"
                 "- 🗺️ 生成完整的旅行攻略\n\n"
-                "请告诉我你的旅行计划吧！例如：*\"我想去杭州玩4天，预算3000元，喜欢自然风光\"*"
+                '请告诉我你的旅行计划吧！例如：*"我想去杭州玩4天，预算3000元，喜欢自然风光"*'
             ),
         }
     ]
@@ -151,6 +177,41 @@ if "messages" not in st.session_state:
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+
+
+def _consume_stream(prompt_text: str, chat_history, placeholder) -> str:
+    """消费 ``astream_chat`` 事件流：实时展示工具进度与 token，返回最终文本。"""
+    import asyncio
+
+    state = {"status": "🤔 正在为你规划旅行...", "buffer": "", "final": None}
+
+    def render():
+        text = state["buffer"] or state["status"]
+        placeholder.markdown(text)
+
+    def on_event(event: dict) -> None:
+        etype = event.get("type")
+        if etype == "tool_start":
+            state["status"] = f"🔍 正在调用工具：{event.get('name', '')}…"
+        elif etype == "token":
+            state["buffer"] += event.get("content", "")
+        elif etype == "final":
+            state["final"] = event.get("content") or ""
+        elif etype == "error":
+            state["final"] = event.get("message", "处理失败，请重试。")
+        render()
+
+    async def _run():
+        async for event in assistant.astream_chat(
+            prompt_text, chat_history=chat_history
+        ):
+            on_event(event)
+
+    asyncio.run(_run())
+    if state["final"] is None:
+        state["final"] = "抱歉，未能生成响应，请换个说法再试。"
+    return state["final"]
+
 
 # 聊天输入
 if prompt := st.chat_input("告诉我你的旅行需求..."):
@@ -162,17 +223,26 @@ if prompt := st.chat_input("告诉我你的旅行需求..."):
         message_placeholder = st.empty()
         message_placeholder.markdown("🤔 正在为你规划旅行...")
 
+        session_id = web_session.strip() if web_session else None
         if assistant:
-            chat_history = [
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages[:-1]
-            ]
             try:
-                response = assistant.chat(prompt, chat_history=chat_history)
+                if session_id:
+                    # 持久化会话模式：历史与画像由记忆后端自动加载/落盘
+                    response = _consume_stream(prompt, None, message_placeholder)
+                else:
+                    # 匿名模式：沿用页面内历史（不落盘）
+                    chat_history = [
+                        {"role": m["role"], "content": m["content"]}
+                        for m in st.session_state.messages[:-1]
+                    ]
+                    response = _consume_stream(
+                        prompt, chat_history, message_placeholder
+                    )
                 message_placeholder.markdown(response)
-            except Exception as e:
-                response = f"抱歉，处理请求时出错：{str(e)}"
+            except Exception:
+                response = "抱歉，处理请求时出错，请稍后重试。"
                 message_placeholder.error(response)
+                st.error("详细错误请查看服务端日志。")
         else:
             response = (
                 "助手未正确初始化。\n\n"

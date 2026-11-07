@@ -12,7 +12,10 @@ class TestGeocode:
             {
                 "status": "1",
                 "geocodes": [
-                    {"location": "116.397428,39.90923", "formatted_address": "北京市东城区故宫博物院"}
+                    {
+                        "location": "116.397428,39.90923",
+                        "formatted_address": "北京市东城区故宫博物院",
+                    }
                 ],
             }
         )

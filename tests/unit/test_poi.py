@@ -204,6 +204,7 @@ class TestPOITool:
     def test_parse_cost_robust(self):
         """_parse_cost 对非法/缺失值应返回 None 或浮点。"""
         from src.tools.amap.poi import _parse_cost
+
         assert _parse_cost("200") == 200.0
         assert _parse_cost(300) == 300.0
         assert _parse_cost("abc") is None

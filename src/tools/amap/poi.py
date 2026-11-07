@@ -1,13 +1,13 @@
-from typing import Dict, Any, Optional, List
+from typing import Any, Optional
 
 from src.config.settings import get_settings
-from src.utils.http import cached_json_get
+from src.utils.http import acached_json_get, cached_json_get
 from src.utils.logger import logger
 
 # 高德 POI 类型编码
-TYPE_SCENIC = "110000"   # 风景名胜
-TYPE_FOOD = "050000"     # 餐饮服务
-TYPE_HOTEL = "100000"    # 住宿服务
+TYPE_SCENIC = "110000"  # 风景名胜
+TYPE_FOOD = "050000"  # 餐饮服务
+TYPE_HOTEL = "100000"  # 住宿服务
 
 # 预算级别 -> 价格区间（单位：元）。cost 缺失的酒店条目在过滤时保留（避免误删无价目数据）。
 BUDGET_RANGES = {
@@ -45,7 +45,9 @@ def _parse_cost(value: Any) -> Optional[float]:
     return cost
 
 
-def _in_budget(cost: Optional[float], low: Optional[float], high: Optional[float]) -> bool:
+def _in_budget(
+    cost: Optional[float], low: Optional[float], high: Optional[float]
+) -> bool:
     """判断价格是否落在 ``[low, high)`` 区间（low/high 可为 None 表示开区间）。"""
     if cost is None:
         return False
@@ -54,6 +56,33 @@ def _in_budget(cost: Optional[float], low: Optional[float], high: Optional[float
     if high is not None and cost >= high:
         return False
     return True
+
+
+def _apply_budget_filter(
+    data: Optional[dict[str, Any]], budget_lower: str
+) -> Optional[dict[str, Any]]:
+    """对酒店搜索结果做预算区间过滤（同步/异步路径共用）。
+
+    未知预算级别不按价格过滤（仅按关键词）；命中区间的优先，cost 缺失兜底保留。
+    """
+    if not data or "pois" not in data:
+        return data
+    if budget_lower not in BUDGET_RANGES:
+        return data
+
+    low, high = BUDGET_RANGES[budget_lower]
+    pois = data["pois"]
+    filtered: list[dict[str, Any]] = []
+    no_cost: list[dict[str, Any]] = []
+    for poi in pois:
+        biz_ext = poi.get("biz_ext", {})
+        cost = _parse_cost(biz_ext.get("cost")) if isinstance(biz_ext, dict) else None
+        if cost is None:
+            no_cost.append(poi)
+        elif _in_budget(cost, low, high):
+            filtered.append(poi)
+    data["pois"] = filtered + no_cost
+    return data
 
 
 class POITool:
@@ -67,7 +96,7 @@ class POITool:
         types: Optional[str] = None,
         page_size: int = 10,
         with_business: bool = False,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """搜索 POI。
 
         Args:
@@ -104,27 +133,71 @@ class POITool:
         return None
 
     @classmethod
-    def search_scenic_spots(cls, city: str, page_size: int = 10) -> Optional[Dict[str, Any]]:
-        return cls.search_poi(keywords="景点", city=city, types=TYPE_SCENIC, page_size=page_size)
+    async def asearch_poi(
+        cls,
+        keywords: str,
+        city: Optional[str] = None,
+        types: Optional[str] = None,
+        page_size: int = 10,
+        with_business: bool = False,
+    ) -> Optional[dict[str, Any]]:
+        """:meth:`search_poi` 的异步版本（参数/缓存语义一致）。"""
+        params = {
+            "key": get_settings().AMAP_API_KEY,
+            "keywords": keywords,
+            "page_size": page_size,
+        }
+        if city:
+            params["city"] = city
+        if types:
+            params["types"] = types
+        if with_business:
+            params["show_fields"] = "biz_ext"
+
+        cache_key = (
+            f"poi:{keywords}:{city or ''}:{types or ''}:{page_size}:{with_business}"
+        )
+        data = await acached_json_get(cls.BASE_URL, params, cache_key=cache_key)
+        if data and data.get("status") == "1":
+            return data
+        if data:
+            logger.error("高德POI搜索API错误: %s", data.get("info", "未知错误"))
+        return None
 
     @classmethod
-    def search_food(cls, city: str, page_size: int = 10) -> Optional[Dict[str, Any]]:
-        # 美食展示评分 / 人均，启用业务字段
+    def search_scenic_spots(
+        cls, city: str, page_size: int = 10
+    ) -> Optional[dict[str, Any]]:
         return cls.search_poi(
-            keywords="美食", city=city, types=TYPE_FOOD, page_size=page_size, with_business=True
+            keywords="景点", city=city, types=TYPE_SCENIC, page_size=page_size
         )
 
     @classmethod
-    def search_hotel(cls, city: str, page_size: int = 10) -> Optional[Dict[str, Any]]:
+    def search_food(cls, city: str, page_size: int = 10) -> Optional[dict[str, Any]]:
+        # 美食展示评分 / 人均，启用业务字段
+        return cls.search_poi(
+            keywords="美食",
+            city=city,
+            types=TYPE_FOOD,
+            page_size=page_size,
+            with_business=True,
+        )
+
+    @classmethod
+    def search_hotel(cls, city: str, page_size: int = 10) -> Optional[dict[str, Any]]:
         # 酒店展示评分 / 参考价，启用业务字段
         return cls.search_poi(
-            keywords="酒店", city=city, types=TYPE_HOTEL, page_size=page_size, with_business=True
+            keywords="酒店",
+            city=city,
+            types=TYPE_HOTEL,
+            page_size=page_size,
+            with_business=True,
         )
 
     @classmethod
     def search_hotel_by_budget(
         cls, city: str, budget: str = "", page_size: int = 10
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """根据预算搜索酒店。
 
         budget 可以是 '经济型'(<300), '舒适型'(300-600), '高档型'(600-1000), '豪华型'(>1000)。
@@ -140,31 +213,60 @@ class POITool:
             page_size=page_size,
             with_business=True,
         )
-        if not data or "pois" not in data:
-            return data
-
-        # 未知预算级别：不按价格过滤，仅按关键词搜索（原行为）
-        if budget_lower not in BUDGET_RANGES:
-            return data
-
-        low, high = BUDGET_RANGES[budget_lower]
-        pois = data["pois"]
-        filtered: List[Dict[str, Any]] = []
-        no_cost: List[Dict[str, Any]] = []
-        for poi in pois:
-            biz_ext = poi.get("biz_ext", {})
-            cost = _parse_cost(biz_ext.get("cost")) if isinstance(biz_ext, dict) else None
-            if cost is None:
-                no_cost.append(poi)
-            elif _in_budget(cost, low, high):
-                filtered.append(poi)
-
-        # 命中区间的优先，cost 缺失的兜底保留
-        data["pois"] = filtered + no_cost
-        return data
+        return _apply_budget_filter(data, budget_lower)
 
     @classmethod
-    def format_hotel_with_budget(cls, poi_data: Dict[str, Any], budget: str = "") -> str:
+    async def asearch_scenic_spots(
+        cls, city: str, page_size: int = 10
+    ) -> Optional[dict[str, Any]]:
+        return await cls.asearch_poi(
+            keywords="景点", city=city, types=TYPE_SCENIC, page_size=page_size
+        )
+
+    @classmethod
+    async def asearch_food(
+        cls, city: str, page_size: int = 10
+    ) -> Optional[dict[str, Any]]:
+        return await cls.asearch_poi(
+            keywords="美食",
+            city=city,
+            types=TYPE_FOOD,
+            page_size=page_size,
+            with_business=True,
+        )
+
+    @classmethod
+    async def asearch_hotel(
+        cls, city: str, page_size: int = 10
+    ) -> Optional[dict[str, Any]]:
+        return await cls.asearch_poi(
+            keywords="酒店",
+            city=city,
+            types=TYPE_HOTEL,
+            page_size=page_size,
+            with_business=True,
+        )
+
+    @classmethod
+    async def asearch_hotel_by_budget(
+        cls, city: str, budget: str = "", page_size: int = 10
+    ) -> Optional[dict[str, Any]]:
+        """:meth:`search_hotel_by_budget` 的异步版本。"""
+        budget_lower = budget.strip().lower() if budget else ""
+        keywords = BUDGET_KEYWORDS.get(budget_lower, "酒店")
+        data = await cls.asearch_poi(
+            keywords=keywords,
+            city=city,
+            types=TYPE_HOTEL,
+            page_size=page_size,
+            with_business=True,
+        )
+        return _apply_budget_filter(data, budget_lower)
+
+    @classmethod
+    def format_hotel_with_budget(
+        cls, poi_data: dict[str, Any], budget: str = ""
+    ) -> str:
         """格式化酒店列表，标注预算级别"""
         if not poi_data or "pois" not in poi_data:
             return "暂无符合条件的住宿信息"
@@ -190,7 +292,7 @@ class POITool:
         return "\n".join(lines)
 
     @classmethod
-    def format_poi_list(cls, poi_data: Dict[str, Any], title: str = "搜索结果") -> str:
+    def format_poi_list(cls, poi_data: dict[str, Any], title: str = "搜索结果") -> str:
         if not poi_data or "pois" not in poi_data:
             return f"暂无{title}信息"
 

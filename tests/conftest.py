@@ -16,6 +16,7 @@ def mock_env_vars(monkeypatch):
     monkeypatch.setenv("DEBUG", "true")
 
     from src.config.settings import get_settings
+
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -32,6 +33,7 @@ def mock_http(monkeypatch):
     默认返回 ``{"status": "1"}``。
     """
     from src.utils import http
+
     http.clear_cache()
 
     holder = {"value": {"status": "1"}}
@@ -39,10 +41,11 @@ def mock_http(monkeypatch):
     def fake_get(url, params, cache_key=None, timeout=None):
         return holder["value"]
 
-    import src.tools.amap.weather as weather_mod
+    import src.tools.amap.geocode as geocode_mod
     import src.tools.amap.poi as poi_mod
     import src.tools.amap.route as route_mod
-    import src.tools.amap.geocode as geocode_mod
+    import src.tools.amap.weather as weather_mod
+
     monkeypatch.setattr(weather_mod, "cached_json_get", fake_get)
     monkeypatch.setattr(poi_mod, "cached_json_get", fake_get)
     monkeypatch.setattr(route_mod, "cached_json_get", fake_get)

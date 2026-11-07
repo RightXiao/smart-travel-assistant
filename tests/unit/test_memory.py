@@ -40,10 +40,13 @@ class TestFileMemory:
 
     def test_add_messages_batch(self, mem_dir):
         mem = FileMemory(storage_dir=mem_dir)
-        mem.add_messages("s1", [
-            {"role": "user", "content": "a"},
-            {"role": "assistant", "content": "b"},
-        ])
+        mem.add_messages(
+            "s1",
+            [
+                {"role": "user", "content": "a"},
+                {"role": "assistant", "content": "b"},
+            ],
+        )
         assert len(mem.get_messages("s1")) == 2
 
     def test_limit_returns_recent(self, mem_dir):
@@ -117,10 +120,13 @@ class TestFileMemory:
     def test_atomic_write_leaves_valid_json(self, mem_dir):
         """写入后文件应是合法 JSON，且无 .tmp 残留。"""
         mem = FileMemory(storage_dir=mem_dir)
-        mem.add_messages("s1", [
-            {"role": "user", "content": "a"},
-            {"role": "assistant", "content": "b"},
-        ])
+        mem.add_messages(
+            "s1",
+            [
+                {"role": "user", "content": "a"},
+                {"role": "assistant", "content": "b"},
+            ],
+        )
         files = list(Path(mem_dir).glob("*.json"))
         assert len(files) == 1
         payload = json.loads(files[0].read_text(encoding="utf-8"))

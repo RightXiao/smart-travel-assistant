@@ -1,0 +1,39 @@
+# 密钥与本地配置（绝不打进镜像）
+.env
+.env.*
+!.env.example
+
+# 版本控制与 CI
+.git
+.github
+.gitignore
+
+# Python 产物
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+.mypy_cache
+
+# 虚拟环境
+venv
+.venv
+
+# 运行时数据（通过卷挂载持久化）
+memory
+
+# 测试 / 文档 / 工具目录
+tests
+docs
+.zcode
+.claude
+.trae
+
+# IDE
+.vscode
+.idea

@@ -1,99 +1,36 @@
-from typing import Optional
+"""API 请求 / 响应模型。
+
+仅保留当前 API 实际接线的契约模型并施加输入约束（长度上限、role 白名单、
+mode 枚举），在进入业务逻辑前拦截非法输入。
+"""
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
-class WeatherInfo(BaseModel):
-    city: str
-    weather: str
-    temperature: str
-    wind_direction: str
-    wind_power: str
-    humidity: str
-    report_time: str
-
-
-class WeatherForecast(BaseModel):
-    city: str
-    forecasts: list[dict] = Field(default_factory=list)
-    report_time: str = ""
-
-
-class ScenicSpot(BaseModel):
-    name: str
-    address: str
-    location: str
-    rating: str = ""
-    type_name: str = ""
-
-
-class RouteStep(BaseModel):
-    instruction: str
-    road: str = ""
-    distance: str = ""
-    duration: str = ""
-
-
-class RouteInfo(BaseModel):
-    origin: str
-    destination: str
-    duration_minutes: int
-    distance_km: float
-    steps: list[RouteStep] = Field(default_factory=list)
-
-
-class HotelInfo(BaseModel):
-    name: str
-    address: str
-    location: str
-    rating: str = ""
-    price_range: str = ""
-    type_name: str = ""
-
-
-class FoodInfo(BaseModel):
-    name: str
-    address: str
-    location: str
-    rating: str = ""
-    type_name: str = ""
-    avg_price: str = ""
-
-
-class DayPlan(BaseModel):
-    day: int
-    title: str = ""
-    spots: list[str] = Field(default_factory=list)
-    meals: list[str] = Field(default_factory=list)
-    hotel: str = ""
-    tips: str = ""
-
-
-class TravelPlan(BaseModel):
-    destination: str
-    days: int
-    budget: str
-    weather: Optional[WeatherInfo] = None
-    day_plans: list[DayPlan] = Field(default_factory=list)
-    food_recommendations: list[str] = Field(default_factory=list)
-    hotel_recommendations: list[str] = Field(default_factory=list)
-    general_tips: str = ""
-
-
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=2000, description="用户消息")
     chat_history: list[ChatMessage] = Field(default_factory=list)
 
 
 class MultiSpotRouteRequest(BaseModel):
     spots: list[str] = Field(min_length=2, description="景点名称列表（至少 2 个）")
     city: str = ""
-    mode: str = "driving"
+    mode: Literal["driving", "transit"] = "driving"
+    optimize_order: bool = Field(default=False, description="是否按地理位置就近重排景点顺序以减少绕路")
 
 
 class ChatResponse(BaseModel):
     response: str
+
+
+class PlanRequest(BaseModel):
+    """行程规划请求（Plan-and-Execute 管线入口）。"""
+
+    message: str = Field(min_length=1, max_length=2000, description="行程需求描述")
+    session_id: str = Field(default="default", max_length=128, description="会话标识")

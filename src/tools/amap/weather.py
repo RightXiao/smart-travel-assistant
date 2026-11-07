@@ -1,7 +1,7 @@
-from typing import Dict, Any, Optional
+from typing import Any, Optional
 
 from src.config.settings import get_settings
-from src.utils.http import cached_json_get
+from src.utils.http import acached_json_get, cached_json_get
 from src.utils.logger import logger
 
 
@@ -9,7 +9,9 @@ class WeatherTool:
     BASE_URL = "https://restapi.amap.com/v3/weather/weatherInfo"
 
     @classmethod
-    def get_weather(cls, city: str, extensions: str = "base") -> Optional[Dict[str, Any]]:
+    def get_weather(
+        cls, city: str, extensions: str = "base"
+    ) -> Optional[dict[str, Any]]:
         params = {
             "key": get_settings().AMAP_API_KEY,
             "city": city,
@@ -24,12 +26,35 @@ class WeatherTool:
         return None
 
     @classmethod
-    def get_weather_forecast(cls, city: str) -> Optional[Dict[str, Any]]:
+    async def aget_weather(
+        cls, city: str, extensions: str = "base"
+    ) -> Optional[dict[str, Any]]:
+        """:meth:`get_weather` 的异步版本（缓存/负缓存语义一致）。"""
+        params = {
+            "key": get_settings().AMAP_API_KEY,
+            "city": city,
+            "extensions": extensions,
+        }
+        cache_key = f"weather:{extensions}:{city}"
+        data = await acached_json_get(cls.BASE_URL, params, cache_key=cache_key)
+        if data and data.get("status") == "1":
+            return data
+        if data:
+            logger.error("高德天气API错误: %s", data.get("info", "未知错误"))
+        return None
+
+    @classmethod
+    async def aget_weather_forecast(cls, city: str) -> Optional[dict[str, Any]]:
+        """获取未来4天天气预报（异步版）"""
+        return await cls.aget_weather(city, extensions="all")
+
+    @classmethod
+    def get_weather_forecast(cls, city: str) -> Optional[dict[str, Any]]:
         """获取未来4天天气预报"""
         return cls.get_weather(city, extensions="all")
 
     @classmethod
-    def format_weather_info(cls, weather_data: Dict[str, Any]) -> str:
+    def format_weather_info(cls, weather_data: dict[str, Any]) -> str:
         if not weather_data or "lives" not in weather_data:
             return "暂无天气信息"
 
@@ -51,7 +76,7 @@ class WeatherTool:
         return result
 
     @classmethod
-    def format_forecast_info(cls, weather_data: Dict[str, Any]) -> str:
+    def format_forecast_info(cls, weather_data: dict[str, Any]) -> str:
         if not weather_data or "forecasts" not in weather_data:
             return "暂无天气预报信息"
 
@@ -67,7 +92,15 @@ class WeatherTool:
         lines = [f"\n📅 {forecast.get('city', '未知')} 未来天气预报："]
         for cast in casts:
             date = cast.get("date", "")
-            week_map = {"1": "一", "2": "二", "3": "三", "4": "四", "5": "五", "6": "六", "7": "日"}
+            week_map = {
+                "1": "一",
+                "2": "二",
+                "3": "三",
+                "4": "四",
+                "5": "五",
+                "6": "六",
+                "7": "日",
+            }
             week = week_map.get(str(cast.get("week", "")), "")
             day_weather = cast.get("dayweather", "")
             night_weather = cast.get("nightweather", "")
@@ -83,7 +116,7 @@ class WeatherTool:
         return "\n".join(lines)
 
     @classmethod
-    def get_dressing_advice(cls, weather_data: Dict[str, Any]) -> str:
+    def get_dressing_advice(cls, weather_data: dict[str, Any]) -> str:
         """根据天气数据生成穿搭建议"""
         if not weather_data or "lives" not in weather_data:
             return ""

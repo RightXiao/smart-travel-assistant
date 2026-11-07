@@ -10,13 +10,13 @@
 import json
 import shutil
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from src.agents.travel_assistant import TravelAssistant
 from src.memory.file_memory import FileMemory
-from langchain_core.messages import AIMessage
 
 _TMP_ROOT = Path(__file__).resolve().parent.parent / ".tmp"
 
@@ -32,18 +32,19 @@ def mem_dir():
 
 def _build_assistant(mem_dir: Path):
     """构造一个绕过真实 LLM 初始化的 TravelAssistant。"""
-    with patch("src.agents.travel_assistant.require_api_keys"), \
-         patch("src.agents.travel_assistant.ChatOpenAI"), \
-         patch("src.agents.travel_assistant.create_react_agent"):
+    with patch("src.agents.travel_assistant.require_api_keys"), patch(
+        "src.agents.travel_assistant.build_chat_model"
+    ), patch("src.agents.travel_assistant.create_react_agent"):
         asst = TravelAssistant(memory=FileMemory(storage_dir=str(mem_dir)))
     return asst
 
 
 def _fake_invoke(captured):
-    """返回一个会记录入参 messages 的 fake agent.invoke。"""
+    """返回一个会记录入参 messages 的 fake agent.invoke（兼容 config 参数）。"""
 
-    def _invoke(payload):
+    def _invoke(payload, config=None):
         captured["last_messages"] = payload["messages"]
+        captured["config"] = config
         return {"messages": [AIMessage(content="这是助手回复")]}
 
     return _invoke

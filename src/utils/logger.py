@@ -46,8 +46,10 @@ def setup_logger(
     return logger
 
 
-# 全局日志记录器：根据 Settings.DEBUG 决定级别
+# 全局日志记录器：DEBUG=true 时强制 DEBUG，否则取 Settings.LOG_LEVEL
+_settings = get_settings()
+_level_name = "DEBUG" if _settings.DEBUG else _settings.LOG_LEVEL
 logger = setup_logger(
     "travel_agent",
-    level=logging.DEBUG if get_settings().DEBUG else logging.INFO,
+    level=getattr(logging, _level_name.upper(), logging.INFO),
 )

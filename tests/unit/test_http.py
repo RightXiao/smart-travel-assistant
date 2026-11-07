@@ -1,5 +1,5 @@
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.utils import http
 
@@ -25,6 +25,25 @@ class TestTTLCache:
         cache.set("k", "v", ttl=10)
         cache.clear()
         assert cache.get("k") is None
+
+    def test_fifo_eviction_on_max_size(self):
+        """超过 max_size 时按插入顺序淘汰最早条目，防止无界增长。"""
+        cache = http.TTLCache(max_size=2)
+        cache.set("a", 1, ttl=10)
+        cache.set("b", 2, ttl=10)
+        cache.set("c", 3, ttl=10)  # 触发淘汰 "a"
+        assert cache.get("a") is None
+        assert cache.get("b") == 2
+        assert cache.get("c") == 3
+
+    def test_overwrite_does_not_evict(self):
+        """更新已存在的 key 不应触发淘汰。"""
+        cache = http.TTLCache(max_size=2)
+        cache.set("a", 1, ttl=10)
+        cache.set("b", 2, ttl=10)
+        cache.set("a", 11, ttl=10)  # 覆盖而非新增
+        assert cache.get("a") == 11
+        assert cache.get("b") == 2
 
 
 class TestCachedJsonGet:
@@ -56,7 +75,9 @@ class TestCachedJsonGet:
         import requests
 
         with patch("src.utils.http.get_session") as mock_session:
-            mock_session.return_value.get.side_effect = requests.RequestException("boom")
+            mock_session.return_value.get.side_effect = requests.RequestException(
+                "boom"
+            )
             http.clear_cache()
             assert http.cached_json_get("http://x", {}, cache_key="k") is None
 

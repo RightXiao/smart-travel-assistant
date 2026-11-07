@@ -3,8 +3,9 @@ import json
 import os
 import threading
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
+from src.config.settings import get_settings
 from src.memory.base import BaseMemory
 from src.utils.logger import logger
 
@@ -21,14 +22,15 @@ class FileMemory(BaseMemory):
     历史丢失或写坏 JSON。
     """
 
-    def __init__(self, storage_dir: str = "memory"):
+    def __init__(self, storage_dir: Optional[str] = None):
         """初始化文件记忆系统。
 
         Args:
-            storage_dir: 存储目录路径（相对路径基于工作目录）。
+            storage_dir: 存储目录路径（相对路径基于工作目录）；
+                缺省时取 ``Settings.MEMORY_DIR``。
         """
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(exist_ok=True)
+        self.storage_dir = Path(storage_dir or get_settings().MEMORY_DIR)
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
 
     def _get_file_path(self, session_id: str) -> Path:

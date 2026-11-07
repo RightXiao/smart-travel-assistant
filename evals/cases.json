@@ -1,0 +1,107 @@
+[
+  {
+    "id": "weather_basic",
+    "capability": "weather",
+    "input": "北京今天天气怎么样？",
+    "expected_tools": ["查询实时天气"],
+    "must_include": ["北京"]
+  },
+  {
+    "id": "weather_forecast",
+    "capability": "weather",
+    "input": "上海未来几天天气如何？适合出行吗？",
+    "expected_tools": ["查询天气预报"],
+    "must_include": []
+  },
+  {
+    "id": "weather_multi_city",
+    "capability": "weather",
+    "input": "对比一下北京和上海的天气",
+    "expected_tools": ["查询实时天气"],
+    "must_include": ["北京", "上海"]
+  },
+  {
+    "id": "dressing_advice",
+    "capability": "weather",
+    "input": "这个周末去哈尔滨旅游，该穿什么衣服？",
+    "expected_tools": ["查询穿搭建议"],
+    "must_include": []
+  },
+  {
+    "id": "scenic_spots",
+    "capability": "poi",
+    "input": "成都有哪些值得去的景点？",
+    "expected_tools": ["查询景点"],
+    "must_include": ["成都"]
+  },
+  {
+    "id": "food_recommend",
+    "capability": "poi",
+    "input": "广州有什么好吃的推荐？",
+    "expected_tools": ["查询美食"],
+    "must_include": []
+  },
+  {
+    "id": "hotel_basic",
+    "capability": "poi",
+    "input": "杭州有哪些酒店推荐？",
+    "expected_tools": ["查询住宿"],
+    "must_include": []
+  },
+  {
+    "id": "hotel_by_budget",
+    "capability": "poi",
+    "input": "预算800元一晚，在杭州住什么酒店比较合适？",
+    "expected_tools": ["按预算查询住宿"],
+    "must_include": []
+  },
+  {
+    "id": "driving_route",
+    "capability": "route",
+    "input": "帮我查一下从天安门到故宫开车怎么走，大概多久？",
+    "expected_tools": ["驾车路线规划"],
+    "must_include": []
+  },
+  {
+    "id": "transit_route",
+    "capability": "route",
+    "input": "在北京从北京南站到颐和园坐地铁公交怎么走？",
+    "expected_tools": ["公交路线规划"],
+    "must_include": []
+  },
+  {
+    "id": "multi_spot_route",
+    "capability": "route",
+    "input": "帮我规划北京天安门、故宫、颐和园这几个景点的游览路线",
+    "expected_tools": ["多景点路线规划"],
+    "must_include": []
+  },
+  {
+    "id": "full_plan",
+    "capability": "planning",
+    "input": "我想去杭州玩2天，预算3000元，帮我做一份旅游攻略",
+    "expected_tools": ["查询实时天气", "查询景点"],
+    "must_include": ["杭州"]
+  },
+  {
+    "id": "plan_with_food_hotel",
+    "capability": "planning",
+    "input": "成都不管是吃的还是住的都帮我推荐一下，预算不限",
+    "expected_tools": ["查询美食", "查询住宿"],
+    "must_include": ["成都"]
+  },
+  {
+    "id": "no_tool_smalltalk",
+    "capability": "restraint",
+    "input": "1加1等于几？",
+    "expected_tools": [],
+    "must_include": ["2"]
+  },
+  {
+    "id": "no_tool_out_of_domain",
+    "capability": "restraint",
+    "input": "帮我写一首关于大海的诗",
+    "expected_tools": [],
+    "must_include": []
+  }
+]
